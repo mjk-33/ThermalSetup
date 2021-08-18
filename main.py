@@ -1,5 +1,9 @@
-import pyvisa
+import pyvisa 
+import os
+import xlsxwriter
 from datetime import datetime
+
+from xlsxwriter import workbook
 
 
 rm = pyvisa.ResourceManager()
@@ -13,7 +17,7 @@ inst.write("*RST")     #reset
 scanIntervals = float(input("Enter the delay between measurements [in seconds]: "))      #Delay in secs, between scans
 numberScans = int(input("Enter the scan quantity: "))+1         #Number of scan sweeps to measure
 channelDelay = 0.1      #Delay, in secs, between relay closure and measurement 
-points = 0              #number of data points stored
+#points = 0              #number of data points stored
 user = input("User: ")
 thermocouples=input("Which thermocuples will be used? Type one by one with coma between them: ")
 
@@ -37,8 +41,8 @@ inst.write(("TRIG:TIMER " + str(scanIntervals)))
 #start the scan and retrieve the scan time
 inst.write("INIT;:SYSTEM:TIME:SCAN?")   
 now = datetime.now()
-start_time =  now.strftime("%d/%m/%Y %H:%M:%S")
-print("Test start time: ", start_time, " | User: ")
+start_time =  now.strftime("%d-%m-%Y %H-%M")
+print("Test start time: ", start_time, " | User: ", user)
 #empty line
 print()
 '''wait until there is a data available'''
@@ -51,15 +55,33 @@ while (points==0):
 The data points are printed 
 data, time, channel
 '''
+#excel_file = xlsxwriter.Workbook(os.path("C:\\ThermalSetup\Results"f"\{start_time}.xlsx"))
+excel_file = xlsxwriter.Workbook(f"Results/{start_time}.xlsx")
+worksheet=excel_file.add_worksheet("Measures")
+worksheet.write('A1',"User:")
+worksheet.write('B1',f"{user}")
 
-for scan in range (1,numberScans):
+worksheet.write('A3',"Start time:")
+worksheet.write('B3', f"{start_time}")
+loopstartvalue=1
+rowIndex = 5
+for scan in range (loopstartvalue,numberScans):
+    worksheet.write('A'+str(rowIndex), f"Scan no. {scan}")
+    rowIndex+=1
+    worksheet.write('B'+str(rowIndex),"Channel")
+    worksheet.write('C'+str(rowIndex), "Temperature")
+    worksheet.write('D'+str(rowIndex), "Time")
+
     numberScans=numberScans-1
     scansLeft = numberScans-1
 
     print("Scan no.: ",scan)
-    print("Scans remaining: ", scansLeft)
+    print("\nScans remaining: ", scansLeft)
+
     for chan in range(1,numberChannels):
+        
         try:
+
             inst.write("DATA:REMOVE? 1")
             values = inst.read()
             v1,v2,v3 = values.split(',')
@@ -67,17 +89,25 @@ for scan in range (1,numberScans):
             print("\nChannel: ",int(v3))
             print("Temperature: ",float(v1),"[*C]")
             print("Time: ",float(v2), "[s]\n")
-            
             points = 0
             #wait for data
             while (points==0):
                 inst.write("DATA:POINTS?")
                 points=int(inst.read())
+
         except KeyboardInterrupt:
             inst.write("*CLS")     #clear 
             inst.write("*RST")     #reset     
             inst.close()
             print ('\nClosing')
+        rowIndex+=1
+        worksheet.write('B'+str(rowIndex), float(v3))
+        worksheet.write('C'+str(rowIndex), float(v1))
+        worksheet.write('D'+str(rowIndex), float(v2))
+    rowIndex+=1
+
+
+excel_file.close()
 
        
         
